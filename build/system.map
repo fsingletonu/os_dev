@@ -1,0 +1,6 @@
+c0000000 T _start
+c0000007 T kernel_init
+c0000010 T in_byte
+c0000023 T in_word
+c0000037 T out_byte
+c000004d T out_word
