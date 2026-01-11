@@ -1,3 +1,4 @@
+[bits 16]
 [org 0x7c00]
 mov ax,3
 int 0x10
@@ -11,9 +12,9 @@ mov sp,0x7c00
 mov si,booting
 call print
 
-mov edi,0x1000
-mov ecx,2
-mov bl,4
+mov edi,0x1000 ; load addr
+mov ecx,2 ; start section
+mov bl,8 ; the count of section
 call read_disk
 
 cmp word [0x1000],0x55aa
@@ -101,16 +102,15 @@ print:
     ret
 
 booting:
-    db "Booting Franklin...",10,13,0
+    db "Booting osdev...",10,13,0
 
 error:
     mov si,.msg
     call print
     hlt
     jmp $
-    .msg db "Booting error...",10,13,0
+    .msg db "Booting osdev...",10,13,0
 
 times 510-($-$$) db 0x00
 
-db 0x55
-db 0xaa
+dw 0xaa55

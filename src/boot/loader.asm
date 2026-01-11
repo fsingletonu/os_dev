@@ -1,74 +1,42 @@
+[bits 16]
 [org 0x1000]
 
-; 这个是为了保证boot加载的成功
 dw 0x55aa
-
-mov si,loading
-call print
 
 detect_memory:
     xor ebx,ebx
-
     mov ax,0
     mov es,ax
     mov di,ards_buffer
-
-    mov edx,0x534d4150
-
-.next:
-    mov eax,0xe820
-    mov ecx,20
-
-    int 0x15
-
-    jc error
-
-    add di,cx
-
+    .next:
+        mov edx,0x534d4150
+        mov eax,0xe820
+        mov ecx,20
+        int 0x15
+        jc error
+        cmp eax, 0x534D4150
+        jne error
+    add di, cx
     inc word [ards_count]
-
     cmp ebx,0
-    jnz .next
+    jne .next
 
-    mov si,detecting
-    call print
-
-    jmp prepare_protected_mode
-
-prepare_protected_mode:
-
+pre_protected:
     cli
 
     in al,0x92
-    or al,0b10
-    out 0x92,al
+    or al,0x02
+    out 0x90,al
 
-    lgdt [gdt_ptr] ; 内核转移之后 
+    lgdt [gdt_ptr]
+    lidt [idt_ptr]
 
     mov eax,cr0
-    or eax,1
+    or eax,0x00000001
     mov cr0,eax
 
-    jmp dword code_selector:protect_mode
-
-print:
-    mov ah,0x0e
-.next:
-    mov al,[si]
-    cmp al,0
-    jz .done
-    int 0x10
-    inc si
-    jmp .next
-.done:
-    ret
-
-loading:
-    db "loading Franklin...",10,13,0
-
-detecting:
-    db "detecting memory success",10,13,0
-
+    jmp dword code_selector:protected
+        
 error:
     mov si,.msg
     call print
@@ -77,109 +45,190 @@ error:
     .msg db "loading error...",10,13,0
 
 [bits 32]
-; 一页的大小为4k
-page_size equ 0x1000
 
-; 内核页目录、页表在内存中的位置，一个项就要占用4k的内存空间，要求是4k对齐的
-; 最后的页表项中的高20位才是物理地址，后面的03是为了符合结构要求
-system_tde equ 0x8000
-system_tpe equ 0x9000
-system_loader equ 0xa000
-
-; 应当将实模式下的1M内存全部恒等映射到内核页表中
-real_mode_address equ 0x00000
-kernel_address equ 0x10000
-kernel_addres_va equ 0xc0000000
-
-protect_mode:
+protected:
     mov ax,data_selector
     mov ds,ax
     mov es,ax
     mov fs,ax
     mov gs,ax
     mov ss,ax
+    xor eax,eax
+    
+; because 32-bits adddress calculate the size of memory
 
-    mov esp,0x10000
+    mov ax,[ards_count]
+    sub ax,2
+    mov bx,20
+    mul bx
+    add eax,ards_buffer
+    mov ebx,[eax]
+    mov esi,[eax+8]
+    add ebx,esi
+    shr ebx,10
+    mov [memory_k],ebx
 
-    ; 将内核加载进0x10000的位置
-    mov edi,0x10000
+    xor eax,eax
+
+    mov eax,0x000100000
+    mov cr3,eax
+    
+    mov ebx,[memory_k]
+    shr ebx,2
+    mov [memory_page],ebx
+
+    mov ebx,cr3
+    add ebx,4096
+    mov [pt_addr],ebx
+
+    mov ecx,[memory_page]
+; now ecx keep the count of pde (register one pde after 4 offset byte address)
+    shr ecx,10
+    mov ebx,cr3
+    xor esi,esi
+
+register_pde:
+    xor eax,eax
+    mov byte [ebx],0b0_0_0_0_0_0_1_1
+    mov eax,[pt_addr]
+    shr eax,8
+    and al,0xf0
+    mov byte [ebx+1],al
+    shr eax,8
+    mov byte [ebx+2],al
+    shr eax,8
+    mov byte [ebx+3],al
+    inc esi
+    add ebx,4
+    mov eax,[pt_addr]
+    add eax,4096
+    mov [pt_addr],eax
+    cmp esi,ecx
+    jne register_pde
+
+    shl ecx,12
+    mov eax,[pt_addr]
+    sub eax,ecx
+
+    mov [pt_addr],eax
+
+    mov ebx,[pt_addr]
+    mov ecx,[memory_page]
+    xor esi,esi
+
+register_pte:
+    xor eax,eax
+    mov byte [ebx],0b0_0_0_0_0_0_1_1
+    mov eax,esi
+    shl eax,12
+    shr eax,8
+    and al,0xf0
+    mov byte [ebx+1],al
+    shr eax,8
+    mov byte [ebx+2],al
+    shr eax,8
+    mov byte [ebx+3],al
+    add ebx,4
+    inc esi
+    cmp esi,ecx
+    jne register_pte
+
+; mapping the kernel into high mapping address
+    mov eax,[memory_page]
+    shl eax,2
+    mov ebx,[pt_addr]
+    add eax,ebx
+    mov [kernel_mapping_addr],eax
+
+    mov ebx,[kernel_size]
+    shr ebx,10
+    add eax,ebx
+    mov [kernel_load_addr],eax
+
+    mov ebx,[kernel_mapping_addr]
+    mov ecx,[kernel_size]
+    shr ecx,12
+    xor esi,esi
+register_kernel:
+    xor eax,eax
+    mov byte [ebx],0b0_0_0_0_0_0_1_1
+    mov eax,[kernel_load_addr]
+    shr eax,8
+    and al,0xf0
+    mov byte [ebx+1],al
+    shr eax,8
+    mov byte [ebx+2],al
+    shr eax,8
+    mov byte [ebx+3],al
+    add ebx,4
+    inc esi
+    mov eax,[kernel_load_addr]
+    add eax,4096
+    mov [kernel_load_addr],eax
+    cmp ecx,esi
+    jne register_kernel
+
+    mov eax,[kernel_load_addr]
+    mov ebx,[kernel_size]
+    sub eax,ebx
+    mov [kernel_load_addr],eax
+
+    mov eax,[pt_addr]
+
+    mov ebx,cr3
+    mov eax,768
+    shl eax,2
+    add ebx,eax
+    mov eax,[kernel_mapping_addr]
+    mov edi,eax
+    mov ecx,256
+    xor esi,esi
+
+register_pdt_kernel:
+    mov byte [ebx],0b0_0_0_0_0_0_1_1
+    shr eax,8
+    and al,0xf0
+    mov byte [ebx+1],al
+    shr eax,8
+    mov byte [ebx+2],al
+    shr eax,8
+    mov byte [ebx+3],al
+    add ebx,4
+    add edi,4096
+    mov eax,edi
+    inc esi
+    cmp ecx,esi
+    jne register_pdt_kernel
+
+; load kernel into memory
+    xor edi,edi
+    xor ecx,ecx
+    xor ebx,ebx
+    mov edi,[kernel_load_addr]
     mov ecx,10
     mov bl,240
     call read_disk
 
-    xor eax,eax
-    xor ebx,ebx
-    xor ecx,ecx
-    xor edx,edx
-
-    ; 对内存进行虚拟化的映射
-    mov ecx,256
-    mov ebx,real_mode_address
-    mov edx,real_mode_address
-
-    mov eax,edx
-    shr eax,22
-    mov dword [system_tde+4*eax],system_loader
-    or dword [system_tde+4*eax],0x03
-
-    page_loop_function:
-        mov eax,edx
-        shr eax,12
-        and eax,0x3ff
-        and ebx,0x11111000
-        or ebx,0x03
-        .page_loop:
-            mov [system_loader+4*eax],ebx
-            add ebx,page_size
-            add eax,1
-            loop .page_loop
-
-    xor eax,eax
-    xor ebx,ebx
-    xor ecx,ecx
-    xor edx,edx
-
-    mov ecx,256
-    mov ebx,kernel_address
-    mov edx,kernel_addres_va
-
-    mov eax,edx
-    shr eax,22
-    mov dword [system_tde+4*eax],system_tpe
-    or dword [system_tde+4*eax],0x03
-
-    kernel_loop_function:
-        mov eax,edx
-        shr eax,12
-        and eax,0x3ff
-        and ebx,0x11111000
-        or ebx,0x03
-        .kernel_loop:
-            mov [system_tpe+4*eax],ebx
-            add ebx,page_size
-            add eax,1
-            loop .kernel_loop
-
+; flush TLB and cache
     invlpg [0xc0000000]
-    
-    xor eax,eax
 
-    mov eax,cr3
-    or eax,system_tde
-    mov cr3,eax
-
-    xor eax,eax
-
+; enable page mode
     mov eax,cr0
     or eax,0x80000000
     mov cr0,eax
 
-    jmp short flush
+; pass parameters to the kernel
+    mov eax,[memory_page]
+    mov dword [0x7c00],eax
+    mov eax,[pt_addr]
+    mov dword [0x7c04],eax
+    mov eax,[kernel_mapping_addr]
+    mov dword [0x7c08],eax
+    mov eax,[kernel_load_addr]
+    mov dword [0x7c0c],eax
 
-    flush:
-    jmp code_selector:kernel_addres_va
-
-    ud2
+; enter kernl
+    jmp dword code_selector:0xc0000000
 
     jmp $
 
@@ -248,37 +297,78 @@ read_disk:
             add edi,2
             loop .readw
         ret
-    
-    code_selector equ (1<<3) ; flat_mode
-    data_selector equ (2<<3) ; flat_mode
-    
-    ; 这里的是以4k为粒度，所以GDT中的相关位的单位也是4k
-    memory_base equ 0
-    memory_limit equ (1024*1024*1024*4)/(1024*4)-1
-    
-    ; 向GDTR中存储的信息有GDT的大小和基地址，对于GDT来说，所有表项都是连续的，可以在后续的C语言中，采用顺序表的形式去完成GDT和IDT的声明
-    ; 一个段的最大界限为1M，这里是内核1M，不用再另外申请空间，100k的内核主程序，8M可以用256个字节管理，以此类推32M用1k去管理（以页为单位管理）
-    ; 只给内存管理的1k字节，后续扩核，再大改；内存分配池给256k，内存的其它管理需要自己想，没有硬件支持
-    gdt_ptr:
-        dw (gdt_end-gdt_base)-1
-        dd gdt_base
-    gdt_base:
-        dd 0,0
-    gdt_code:
-        dw memory_limit & 0xffff
-        dw memory_base & 0xffff
-        db (memory_base >> 16) & 0xff
-        db 0b_1_00_1_1_0_1_0
-        db 0b1_1_0_0_0000 | (memory_limit >> 16)
-        db (memory_base >> 24) & 0xff
-    gdt_data:
-        dw memory_limit & 0xffff
-        dw memory_base & 0xffff
-        db (memory_base >> 16) & 0xff
-        db 0b_1_00_1_0_0_1_0
-        db 0b1_1_0_0_0000 | (memory_limit >> 16)
-        db (memory_base >> 24) & 0xff
+
+print:
+    mov ah,0x0e
+    .next:
+        mov al,[si]
+        cmp al,0
+        jz .done
+        int 0x10
+        inc si
+        jmp .next
+    .done:
+        ret
+
+mapping:
+
+    ret
+
+code_selector equ (1<<3) ; flat_mode
+data_selector equ (2<<3) ; flat_mode
+
+; 这里的是以4k为粒度，所以GDT中的相关位的单位也是4k
+memory_base equ 0
+memory_limit equ (1024*1024*1024*4)/(1024*4)-1
+
+; 向GDTR中存储的信息有GDT的大小和基地址，对于GDT来说，所有表项都是连续的，可以在后续的C语言中，采用顺序表的形式去完成GDT和IDT的声明
+; 一个段的最大界限为1M，这里是内核1M，不用再另外申请空间，100k的内核主程序，8M可以用256个字节管理，以此类推32M用1k去管理（以页为单位管理）
+; 只给内存管理的1k字节，后续扩核，再大改；内存分配池给256k，内存的其它管理需要自己想，没有硬件支持
+gdt_ptr:
+    dw (gdt_end-gdt_base)-1
+    dd gdt_base
+gdt_base:
+    dd 0,0
+gdt_code:
+    dw memory_limit & 0xffff
+    dw memory_base & 0xffff
+    db (memory_base >> 16) & 0xff
+    db 0b_1_00_1_1_0_1_0
+    db 0b1_1_0_0_0000 | (memory_limit >> 16)
+    db (memory_base >> 24) & 0xff
+gdt_data:
+    dw memory_limit & 0xffff
+    dw memory_base & 0xffff
+    db (memory_base >> 16) & 0xff
+    db 0b_1_00_1_0_0_1_0
+    db 0b1_1_0_0_0000 | (memory_limit >> 16)
+    db (memory_base >> 24) & 0xff
 gdt_end:
+
+idt_ptr:
+    dw 256 * 8 - 1
+    dd idt_base
+idt_base:
+    times 256 dw 0, 0x0008, 0x8E00, 0
+
+memory_k:
+    dd 0
+
+memory_page:
+    dd 0
+
+pt_addr:
+    dd 0
+
+kernel_size:
+    dd 0x40000000
+
+; high mapping pt
+kernel_mapping_addr:
+    dd 0
+
+kernel_load_addr:
+    dd 0
 
 ards_count:
     dw 0

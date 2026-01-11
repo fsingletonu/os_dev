@@ -4,4 +4,6 @@
 #include <chr_drv/console.h>
 #include <init/interrupt.h>
 
+void kb_handler();
+
 #endif
