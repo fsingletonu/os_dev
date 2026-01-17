@@ -1,7 +1,11 @@
-#ifndef DATATYPE_H_
-#define DATATYPE_H_
+#ifndef _DATATYPE_H_
+#define _DATATYPE_H_
+#ifndef _GATE_TI_H_
+#define _GATE_TI_H_
 
 #define EOF -1
+
+#define NULLPTR 0
 
 #define NULL 0
 
@@ -33,6 +37,7 @@ typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 
-typedef void* handler_t;
+typedef void *handler_t;
 
+#endif
 #endif

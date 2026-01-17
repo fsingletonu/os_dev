@@ -45,9 +45,21 @@ $(BUILD)/kernel/init/%.o: $(SRC)/kernel/init/%.c
 	$(shell mkdir -p $(dir $@))
 	gcc $(CFLAGS) $(DEBUG) $(INCLUDE) -c $< -o $@
 
-$(BUILD)/kernel.bin: $(BUILD)/kernel/start.o \
+$(BUILD)/kernel.bin: $(BUILD)/kernel/chr_drv/console.o \
+	$(BUILD)/kernel/chr_drv/io.o \
+	$(BUILD)/kernel/chr_drv/keyboard.o \
+	$(BUILD)/kernel/init/desc.o \
+	$(BUILD)/kernel/init/handler.o \
+	$(BUILD)/kernel/init/i386.o \
+	$(BUILD)/kernel/init/interrupt.o \
+	$(BUILD)/kernel/init/trap.o \
+	$(BUILD)/kernel/lib/panic.o \
+	$(BUILD)/kernel/mm/alloc.o \
+	$(BUILD)/kernel/mm/memory.o \
+	$(BUILD)/kernel/mm/page.o \
+	$(BUILD)/kernel/mm/slab.o \
 	$(BUILD)/kernel/main.o \
-	$(BUILD)/kernel/chr_drv/io.o
+	$(BUILD)/kernel/start.o
 	$(shell mkdir -p $(dir $@))
 	ld -m elf_i386 -static $^ -o $@ -T kernel.ld
 
@@ -61,9 +73,9 @@ $(BUILD)/osdev.img: $(BUILD)/boot/boot.bin \
 	$(BUILD)/boot/loader.bin \
 	$(BUILD)/system.bin \
 	$(BUILD)/system.map
-	yes | bximage -q -func=create -hd=16M -sectsize=512 -imgmode=flat $@
+	yes | bximage -q -func=create -hd=32M -sectsize=512 -imgmode=flat $@
 	dd if=$(BUILD)/boot/boot.bin of=$@ bs=512 count=1 conv=notrunc
-	dd if=$(BUILD)/boot/loader.bin of=$@ bs=512 count=4 seek=2 conv=notrunc
+	dd if=$(BUILD)/boot/loader.bin of=$@ bs=512 count=8 seek=2 conv=notrunc
 	dd if=$(BUILD)/system.bin of=$@ bs=512 count=240 seek=10 conv=notrunc
 
 .PHONY: imgmk
