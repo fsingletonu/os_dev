@@ -21,6 +21,11 @@
 #define FRAME_TO_PFN_4K(frame) (frame >> PAGE_OFFSET_4K)
 
 #define PFNTO_TO_PDESCADDR(offset) (pfn_table_t.base + sizeof(struct page) * offset)
+#define PDESCADDR_TO_PFNTO(addr) ((uint32_t)addr - pfn_table_t.base) / sizeof(struct page)
+
+#define ALIGN_BUDDY_SYS_BLK()
+
+#define unsigned int _bitwise gfp_t
 
 enum zone_type
 {
@@ -78,7 +83,7 @@ typedef struct free_area
     uint32_t free_count;
     uint32_t order; // 阶数
     uint32_t size;  // 块的大小
-    struct page* next;
+    struct page *next;
 } free_area;
 
 typedef struct zone
@@ -110,6 +115,6 @@ typedef struct pfn_table
 pfn_table pfn_table_t;
 
 void bump_allocator(void);
-uint32_t get_free_page(void);
+addr_t alloc_pages(page page_t, uint32_t order);
 
 #endif

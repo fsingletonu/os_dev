@@ -22,6 +22,7 @@
 
 #define _packed __attribute__((packed))
 #define _page_aligned __attribute__((aligned(page_aligned)))
+#define _bitwise __attribute__((bitwise))
 
 typedef unsigned char bool;
 
@@ -38,6 +39,7 @@ typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 
 typedef void *handler_t;
+typedef void *addr_t;
 
 #endif
 #endif
