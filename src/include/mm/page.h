@@ -3,6 +3,12 @@
 
 #include <mm/memory.h>
 
+/*
+ *我认为这个部分应当是虚拟地址映射的库函数，设计肯定是和linux不一样的
+ *
+ *
+ */
+
 #define ALLOC_UNFULL 0x00
 #define ALLOC_FULL 0x01
 

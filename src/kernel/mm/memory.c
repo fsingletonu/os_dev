@@ -63,10 +63,6 @@ void pfn_init()
     }
 }
 
-void alloc_pages()
-{
-}
-
 void buddy_init()
 {
     zone_t.type = ZONE_TYPE_NORMAL;
@@ -86,12 +82,14 @@ void buddy_init()
     {
         if ((mss.page_num - k_page) >= (1 << order))
         {
-            // 如果非空就用头插法进行
+            // 如果非空就用头插法进行，最后链表反转
             if (zone_t.free_list[order].next)
             {
                 zone_t.free_list[order].free_count++;
                 struct page *keep = zone_t.free_list[order].next;
                 struct page *new_blk = (struct page *)PFNTO_TO_PDESCADDR(k_page);
+                new_blk->head = 1;
+                new_blk->order = order;
                 keep->free_ptr.prev = new_blk;
                 new_blk->free_ptr.next = keep;
                 new_blk->free_ptr.prev = NULLPTR;
@@ -102,6 +100,8 @@ void buddy_init()
             {
                 zone_t.free_list[order].free_count++;
                 struct page *new_blk = (struct page *)PFNTO_TO_PDESCADDR(k_page);
+                new_blk->head = 1;
+                new_blk->order = order;
                 zone_t.free_list[order].next = new_blk;
                 new_blk->free_ptr.next = NULLPTR;
                 k_page += (1 << order);
@@ -112,6 +112,104 @@ void buddy_init()
             order--;
         }
     }
+    for (size_t i = MAX_ORDER - 1; i != -1; i--)
+    {
+        struct page *ptr = zone_t.free_list[i].next;
+        while (ptr && ptr->free_ptr.next)
+        {
+            ptr = ptr->free_ptr.next;
+        }
+        zone_t.free_list[i].next = ptr;
+    }
+    for (size_t i = MAX_ORDER - 1; i != -1; i--)
+    {
+        struct page *ptr = zone_t.free_list[i].next;
+        uint8_t flags = 1;
+        while (flags)
+        {
+            struct page *k1 = ptr->free_ptr.prev;
+            struct page *k2 = ptr->free_ptr.next;
+            ptr->free_ptr.prev = k2;
+            ptr->free_ptr.next = k1;
+            if (ptr->free_ptr.next == NULLPTR)
+                flags = 0;
+            ptr = ptr->free_ptr.next;
+        }
+    }
+}
+
+/*
+ *对于大块的拆分，需要对齐，这个只是拆分，不要有任何其它的操作，只对order的块拆分为两个order-1的块
+ */
+bool expand(free_area free_list_t)
+{
+    page *page_t = free_list_t.next;
+    uint32_t count = free_list_t.free_count;
+    if (count != 0)
+    {
+        uint32_t now_pfn = PDESCADDR_TO_PFNTO(page_t);
+        uint32_t order = page_t->order;
+        uint32_t new_order = page_t->order - 1;
+        uint32_t new_offset = 1 << new_order;
+        new_offset = new_offset * sizeof(struct page);
+        struct page *new_blk = (struct page *)((uint32_t)page_t + new_offset);
+        page_t->order = new_order;
+        new_blk->head = 1;
+        new_blk->order = new_order;
+        zone_t.free_list[order].free_count--;
+        zone_t.free_list[order].next = zone_t.free_list[order].next->free_ptr.next;
+        zone_t.free_list[order].next->free_ptr.prev = NULLPTR;
+        // 都使用头插法
+        if (zone_t.free_list[new_order].next)
+        {
+            struct page *keep = zone_t.free_list[new_order].next;
+            zone_t.free_list[new_order].free_count += 2;
+            zone_t.free_list[new_order].next = page_t;
+            page_t->free_ptr.next = new_blk;
+            new_blk->free_ptr.prev = page_t;
+            new_blk->free_ptr.next = keep;
+            keep->free_ptr.prev = new_blk;
+            return true;
+        }
+        else
+        {
+            zone_t.free_list[new_order].next = page_t;
+            zone_t.free_list[new_order].free_count += 2;
+            page_t->free_ptr.next = new_blk;
+            new_blk->free_ptr.prev = page_t;
+            new_blk->free_ptr.next = NULLPTR;
+            return true;
+        }
+    }
+    else
+    {
+        return false;
+    }
+}
+
+void expands()
+{
+}
+
+/*
+ *将前1M的内存先分出去，既避免了alloc_pages中的物理地址判断失误，又避免了因硬件端口预留而导致的出错
+ *这里不要使用alloc_pages去处理了，有一个单独的以后也不会遇到的问题
+ */
+void alloc_real_mode()
+{
+}
+
+addr_t alloc_pages(page page_t, uint32_t order)
+{
+    uint8_t flags = 1;
+    addr_t addr;
+    do
+    {
+        if (zone_t.free_list[order].next)
+        {
+        }
+    } while (flags);
+    return addr;
 }
 
 void bump_allocator()
@@ -119,4 +217,5 @@ void bump_allocator()
     get_para();
     pfn_init();
     buddy_init();
+    alloc_real_mode();
 }
