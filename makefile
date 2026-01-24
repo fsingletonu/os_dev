@@ -53,6 +53,7 @@ $(BUILD)/kernel.bin: $(BUILD)/kernel/chr_drv/console.o \
 	$(BUILD)/kernel/init/i386.o \
 	$(BUILD)/kernel/init/interrupt.o \
 	$(BUILD)/kernel/init/trap.o \
+	$(BUILD)/kernel/lib/math.o \
 	$(BUILD)/kernel/lib/panic.o \
 	$(BUILD)/kernel/mm/alloc.o \
 	$(BUILD)/kernel/mm/memory.o \
