@@ -187,29 +187,76 @@ bool expand(free_area free_list_t)
     }
 }
 
-void expands()
-{
-}
-
 /*
  *将前1M的内存先分出去，既避免了alloc_pages中的物理地址判断失误，又避免了因硬件端口预留而导致的出错
  *这里不要使用alloc_pages去处理了，有一个单独的以后也不会遇到的问题
+ *对于伙伴系统内存的划分，不需要考虑0x0地址，因为页标识符不在0x0
+ *没有的情况下，则order加一
  */
-void alloc_real_mode()
+void alloc_system()
 {
+    page page_t;
+    page_t.order = MAX_ORDER -1;
+    page_t.status = PAGE_STATUS_UNFREE;
+    page_t.type = PAGE_TYPE_SYS_CODE_DATA;
+    for (size_t i = 0; i < 1; i++)
+    {
+        alloc_pages(page_t);
+    }
 }
 
-addr_t alloc_pages(page page_t, uint32_t order)
+page* alloc_pages(page page_t)
 {
-    uint8_t flags = 1;
-    addr_t addr;
+    bool flags = true;
+    page* pfn_addr = 0;
+    uint32_t order = page_t.order;
+    uint32_t k_order = order;
     do
     {
-        if (zone_t.free_list[order].next)
+        // 这个是直接有相应大小的块（成功的情况）
+        if (zone_t.free_list[k_order].next && k_order == order)
         {
+            struct page *keep = zone_t.free_list[k_order].next->free_ptr.next;
+            zone_t.free_list[k_order].next->status = PAGE_STATUS_UNFREE;
+            zone_t.free_list[k_order].next->type = page_t.type;
+            zone_t.free_list[k_order].next->ref_count++;
+            pfn_addr = zone_t.free_list[k_order].next;
+            zone_t.free_list[k_order].next = keep;
+            zone_t.free_list[k_order].free_count--;
+            flags = false;
+        }
+        // 这个说明有比它高阶的块，具体是高几阶，还得看实际执行（成功的情况）
+        // 在这里order是需求，k_order是拆分
+        else if (zone_t.free_list[k_order].next && k_order != order)
+        {
+            for (size_t i = k_order; i != order; i--)
+            {
+                expand(zone_t.free_list[i]);
+            }
+            struct page *keep = zone_t.free_list[order].next->free_ptr.next;
+            zone_t.free_list[order].next->status = PAGE_STATUS_UNFREE;
+            zone_t.free_list[order].next->type = page_t.type;
+            zone_t.free_list[order].next->ref_count++;
+            pfn_addr = zone_t.free_list[order].next;
+            zone_t.free_list[order].next = keep;
+            zone_t.free_list[order].free_count--;
+            flags = false;
+        }
+        // 这个是没有空闲块的情况
+        else if (!zone_t.free_list[k_order].next)
+        {
+            k_order++;
+        }
+        /*
+         *这个是全找完了，也没有找到连续的伙伴系统管理块，如果有需要的话，则需要置标志位，去使用valloc()
+         *这个是唯一的失败出口，剩下的都是成功的情况
+         */
+        if (k_order >= MAX_ORDER)
+        {
+            return NULLPTR;
         }
     } while (flags);
-    return addr;
+    return pfn_addr;
 }
 
 void bump_allocator()
@@ -217,5 +264,5 @@ void bump_allocator()
     get_para();
     pfn_init();
     buddy_init();
-    alloc_real_mode();
+    alloc_system();
 }
