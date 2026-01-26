@@ -10,6 +10,7 @@
 #define _MEMORY_H_
 
 #include <datatype.h>
+#include <lib/math.h>
 
 // the count of page
 #define KERNEL_SIZE 30
@@ -21,7 +22,7 @@
 #define FRAME_TO_PFN_4K(frame) (frame >> PAGE_OFFSET_4K)
 
 #define PFNTO_TO_PDESCADDR(offset) (pfn_table_t.base + sizeof(struct page) * offset)
-#define PDESCADDR_TO_PFNTO(addr) ((uint32_t)addr - pfn_table_t.base) / sizeof(struct page)
+#define PDESCADDR_TO_PFNTO(addr) (((uint32_t)addr - pfn_table_t.base) / sizeof(struct page))
 
 #define ALIGN_BUDDY_SYS_BLK()
 
@@ -46,7 +47,8 @@ enum page_type
     PAGE_TYPE_USR_CODE,
     PAGE_TYPE_FREE,
     PAGE_TYPE_RESERVE, // handware reserve
-    PAGE_TYPE_SYS_BUDDY
+    PAGE_TYPE_SYS_BUDDY,
+    PAGE_TYPE_SYS_CODE_DATA
 };
 
 enum page_status
@@ -86,6 +88,11 @@ typedef struct free_area
     struct page *next;
 } free_area;
 
+typedef struct node
+{
+
+} node;
+
 typedef struct zone
 {
     uint8_t type;
@@ -115,6 +122,6 @@ typedef struct pfn_table
 pfn_table pfn_table_t;
 
 void bump_allocator(void);
-addr_t alloc_pages(page page_t, uint32_t order);
+page* alloc_pages(page page_t);
 
 #endif

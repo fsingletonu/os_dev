@@ -8,6 +8,8 @@ void kernel_init()
     console_init();
     interrupt_init();
     bump_allocator();
+    get_rsdp();
+    acpi_fadt_t *m = (acpi_fadt_t *)seek_acpi_header(SSDT);
     while (true)
     {
     }
