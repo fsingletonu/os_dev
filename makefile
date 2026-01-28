@@ -48,15 +48,20 @@ $(BUILD)/kernel/init/%.o: $(SRC)/kernel/init/%.c
 $(BUILD)/kernel.bin: $(BUILD)/kernel/chr_drv/console.o \
 	$(BUILD)/kernel/chr_drv/io.o \
 	$(BUILD)/kernel/chr_drv/keyboard.o \
+	$(BUILD)/kernel/init/acpi.o \
 	$(BUILD)/kernel/init/desc.o \
 	$(BUILD)/kernel/init/handler.o \
 	$(BUILD)/kernel/init/i386.o \
 	$(BUILD)/kernel/init/interrupt.o \
+	$(BUILD)/kernel/init/pci.o \
 	$(BUILD)/kernel/init/trap.o \
+	$(BUILD)/kernel/lib/math.o \
 	$(BUILD)/kernel/lib/panic.o \
-	$(BUILD)/kernel/mm/alloc.o \
+	$(BUILD)/kernel/lib/string.o \
+	$(BUILD)/kernel/mm/alloc_pages.o \
 	$(BUILD)/kernel/mm/memory.o \
-	$(BUILD)/kernel/mm/page.o \
+	$(BUILD)/kernel/mm/mmzone.o \
+	$(BUILD)/kernel/mm/numa.o \
 	$(BUILD)/kernel/mm/slab.o \
 	$(BUILD)/kernel/main.o \
 	$(BUILD)/kernel/start.o
