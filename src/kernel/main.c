@@ -7,7 +7,9 @@ void kernel_init()
     cli();
     console_init();
     interrupt_init();
-    bump_allocator();
+    rsdp_init();
+    mmnode_init();
+    pci_device_table_init();
     while (true)
     {
     }

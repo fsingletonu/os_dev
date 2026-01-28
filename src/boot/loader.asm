@@ -218,16 +218,22 @@ register_pdt_kernel:
     mov cr0,eax
 
 ; pass parameters to the kernel
-    mov eax,[memory_page]
-    mov dword [0x7c00],eax
-    mov eax,[pt_addr]
-    mov dword [0x7c04],eax
-    mov eax,[kernel_mapping_addr]
-    mov dword [0x7c08],eax
-    mov eax,[kernel_load_addr]
-    mov dword [0x7c0c],eax
     mov eax,ards_buffer
+    mov dword [0x7c00],eax
+    mov eax,[memory_page]
+    mov dword [0x7c04],eax
+    mov eax,[pt_addr]
+    mov dword [0x7c08],eax
+    mov eax,[kernel_mapping_addr]
+    mov dword [0x7c0c],eax
+    mov eax,[kernel_load_addr]
     mov dword [0x7c10],eax
+; current bump ptr
+    mov eax,[kernel_load_addr]
+    mov ebx,[keep_kernel_size]
+    shl ebx,12
+    add eax,ebx
+    mov dword [0x7c14],eax
 
     xor eax,eax
 
@@ -375,6 +381,10 @@ kernel_mapping_addr:
 
 kernel_load_addr:
     dd 0
+
+; real kernel size(30)
+keep_kernel_size:
+    dd 30
 
 ards_count:
     dw 0
